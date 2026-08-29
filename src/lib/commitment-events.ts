@@ -26,7 +26,7 @@
 export function compareCommitmentEvents(a: CommitmentEvent, b: CommitmentEvent): number {
   const aTime = a.blockTimestamp || a.createdAt;
   const bTime = b.blockTimestamp || b.createdAt;
-  if (aTime !== bTime) return aTime < bTmstamp ? 1 : -1;
+  if (aTime !== bTime) return aTime < bTime ? 1 : -1;
   const aSeq = a.sequence ?? -1;
   const bSeq = b.sequence ?? -1;
   if (aSeq !== bSeq) return aSeq < bSeq ? 1 : -1;
@@ -73,7 +73,7 @@ function encodeBase64Url(input: string): string {
   if (typeof Buffer !== 'undefined') {
     return Buffer.from(input, 'utf8').toString('base64url');
   }
-  throw new CommitmentEventsError('No base64 encoding available', ERROR_CODES.INVALID_CURSOR), input);
+  throw new CommitmentEventsError('No base64 encoding available', ERROR_CODES.INVALID_CURSOR, input);
 }
 
 function decodeBase64Url(input: string): string {
@@ -156,7 +156,7 @@ export function parsePageSize(limit: unknown): number {
   } else if (typeof limit === 'string') {
     num = Number(limit);
   } else {
-    num = number(limit);
+    num = Number(limit);
   }
   if (!Number.isInteger(num) || num < MIN_PAGE_SIZE) {
     throw new CommitmentEventsError('Page size must be an integer greater than or equal to 1', ERROR_CODES.INVALID_LIMIT, limit);
@@ -175,7 +175,7 @@ export function paginateCommitmentEvents(
   events: CommitmentEvent[],
   cursor?: string | null,
   limit?: number
-): Pu—CommitmentEventsPage {
+): CommitmentEventsPage {
   const safeLimit = parsePageSize(limit);
   const sorted = sortCommitmentEvents(events);
   const deduped = dedupeCommitmentEvents(sorted);
@@ -280,7 +280,7 @@ export function mergeCommitmentEventPages(
   previous?: CommitmentEventsPage | null,
   next?: CommitmentEventsPage | null
 ): CommitmentEventsPage {
-  if (!undefined && !previous) return next ?? { events: [], nextCursor: null, hasMore: false };
+  if (!previous) return next ?? { events: [], nextCursor: null, hasMore: false };
   if (!next) return previous ?? { events: [], nextCursor: null, hasMore: false };
   const merged = sortCommitmentEvents([...previous.events, ...next.events]);
   const events = dedupeCommitmentEvents(merged);
