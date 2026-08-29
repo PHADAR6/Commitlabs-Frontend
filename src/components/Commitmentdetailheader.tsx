@@ -52,7 +52,9 @@ export default function CommitmentDetailHeader({
   onShare,
   explorerNetwork = 'public',
 }: CommitmentDetailHeaderProps) {
-  const config = statusConfig[statusVariant as keyof typeof statusConfig] || statusConfig.active;
+  const config = Object.prototype.hasOwnProperty.call(statusConfig, statusVariant)
+    ? statusConfig[statusVariant as keyof typeof statusConfig]
+    : statusConfig.active;
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const resetCopyStatusRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const explorerUrl = useMemo(
@@ -124,10 +126,10 @@ export default function CommitmentDetailHeader({
       <button
         type="button"
         onClick={onBack}
-        className="group flex items-center gap-2 text-sm text-[#666] hover:text-[#0ff0fc] transition-all duration-200 focus:outline-none focus:text-[#0ff0fc] focus:drop-shadow-[0_0_8px_rgba(15,240,252,0.4)]"
+        className="group flex items-center gap-2 text-sm text-[#666] hover:text-[#0ff0fc] transition-all duration-200 motion-reduce:transition-none focus:outline-none focus:text-[#0ff0fc] focus:drop-shadow-[0_0_8px_rgba(15,240,252,0.4)] focus-visible:ring-2 focus-visible:ring-[#0ff0fc] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
         aria-label="Go back to My Commitments"
       >
-        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform motion-reduce:group-hover:translate-x-0" />
         <span className="group-hover:underline">Back to My Commitments</span>
       </button>
 
@@ -145,7 +147,7 @@ export default function CommitmentDetailHeader({
               <button
                 type="button"
                 onClick={handleCopyCommitmentId}
-                className="group inline-flex items-center gap-2 px-3 py-1.5 bg-[#0a0a0a] border border-[#222] rounded-full text-[#f5f5f7] text-xs font-medium hover:border-[#0ff0fc]/40 hover:bg-[#0ff0fc]/5 hover:shadow-[0_0_16px_rgba(15,240,252,0.12)] transition-all duration-200 focus:outline-none focus:border-[#0ff0fc]/60 focus:shadow-[0_0_20px_rgba(15,240,252,0.22)]"
+                className="group inline-flex items-center gap-2 px-3 py-1.5 bg-[#0a0a0a] border border-[#222] rounded-full text-[#f5f5f7] text-xs font-medium hover:border-[#0ff0fc]/40 hover:bg-[#0ff0fc]/5 hover:shadow-[0_0_16px_rgba(15,240,252,0.12)] transition-all duration-200 motion-reduce:transition-none focus:outline-none focus:border-[#0ff0fc]/60 focus:shadow-[0_0_20px_rgba(15,240,252,0.22)] focus-visible:ring-2 focus-visible:ring-[#0ff0fc] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
                 aria-label="Copy commitment ID"
               >
                 <Copy className="w-3.5 h-3.5" aria-hidden="true" />
@@ -157,7 +159,7 @@ export default function CommitmentDetailHeader({
                   href={explorerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group inline-flex items-center gap-2 px-3 py-1.5 bg-[#0a0a0a] border border-[#222] rounded-full text-[#f5f5f7] text-xs font-medium hover:border-[#0ff0fc]/40 hover:bg-[#0ff0fc]/5 hover:shadow-[0_0_16px_rgba(15,240,252,0.12)] transition-all duration-200 focus:outline-none focus:border-[#0ff0fc]/60 focus:shadow-[0_0_20px_rgba(15,240,252,0.22)]"
+                  className="group inline-flex items-center gap-2 px-3 py-1.5 bg-[#0a0a0a] border border-[#222] rounded-full text-[#f5f5f7] text-xs font-medium hover:border-[#0ff0fc]/40 hover:bg-[#0ff0fc]/5 hover:shadow-[0_0_16px_rgba(15,240,252,0.12)] transition-all duration-200 motion-reduce:transition-none focus:outline-none focus:border-[#0ff0fc]/60 focus:shadow-[0_0_20px_rgba(15,240,252,0.22)] focus-visible:ring-2 focus-visible:ring-[#0ff0fc] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
                   aria-label="Open commitment in Stellar explorer"
                 >
                   <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
@@ -176,15 +178,14 @@ export default function CommitmentDetailHeader({
                 </button>
               )}
 
-              {copyStatus !== 'idle' ? (
-                <span
-                  role="status"
-                  aria-live="polite"
-                  className="text-xs font-medium text-[#0ff0fc]"
-                >
-                  {copyStatus === 'copied' ? 'Copied' : 'Clipboard unavailable'}
-                </span>
-              ) : null}
+              <span
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className={`text-xs font-medium text-[#0ff0fc] ${copyStatus === 'idle' ? 'sr-only' : ''}`}
+              >
+                {copyStatus === 'idle' ? '' : copyStatus === 'copied' ? 'Copied' : 'Clipboard unavailable'}
+              </span>
             </div>
           </div>
 
