@@ -57,6 +57,7 @@ export default function CommitmentDetailHeader({
     : statusConfig.active;
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const resetCopyStatusRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyButtonRef = useRef<HTMLButtonElement>(null);
   const explorerUrl = useMemo(
     () => buildExplorerUrl('contract', commitmentId, explorerNetwork),
     [commitmentId, explorerNetwork],
@@ -101,8 +102,11 @@ export default function CommitmentDetailHeader({
       const textarea = document.createElement('textarea');
       textarea.value = commitmentId;
       textarea.setAttribute('readonly', '');
+      textarea.setAttribute('aria-hidden', 'true');
+      textarea.tabIndex = -1;
       textarea.style.position = 'absolute';
       textarea.style.left = '-9999px';
+      textarea.style.opacity = '0';
       document.body.appendChild(textarea);
       const previousFocus = document.activeElement as HTMLElement | null;
       textarea.focus();
@@ -110,7 +114,12 @@ export default function CommitmentDetailHeader({
       textarea.setSelectionRange(0, commitmentId.length);
       const successful = document.execCommand('copy');
       document.body.removeChild(textarea);
-      if (previousFocus) previousFocus.focus();
+      const copyButton = copyButtonRef.current;
+      if (copyButton && document.contains(copyButton)) {
+        copyButton.focus();
+      } else if (previousFocus && document.contains(previousFocus)) {
+        previousFocus.focus();
+      }
       if (successful) {
         showCopyStatus('copied');
       } else {
@@ -147,6 +156,7 @@ export default function CommitmentDetailHeader({
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                ref={copyButtonRef}
                 onClick={handleCopyCommitmentId}
                 className="group inline-flex items-center gap-2 px-3 py-1.5 bg-[#0a0a0a] border border-[#222] rounded-full text-[#f5f5f7] text-xs font-medium hover:border-[#0ff0fc]/40 hover:bg-[#0ff0fc]/5 hover:shadow-[0_0_16px_rgba(15,240,252,0.12)] transition-all duration-200 motion-reduce:transition-none focus:outline-none focus:border-[#0ff0fc]/60 focus:shadow-[0_0_20px_rgba(15,240,252,0.22)] focus-visible:ring-2 focus-visible:ring-[#0ff0fc] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]"
                 aria-label="Copy commitment ID"
@@ -183,7 +193,7 @@ export default function CommitmentDetailHeader({
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"
-                className={`text-xs font-medium text-[#0ff0fc] ${copyStatus === 'idle' ? 'sr-only' : ''}`}
+                className="sr-only"
               >
                 {copyStatus === 'idle' ? '' : copyStatus === 'copied' ? 'Copied' : 'Clipboard unavailable'}
               </span>
@@ -205,7 +215,7 @@ export default function CommitmentDetailHeader({
         {/* Right Section: Share Button */}
         <button
           type="button"
-          onClick={() => { Promise.resolve(onShare()).catch(() => {}); }}
+          onClick={() => { Promise.resolve().then(onShare).catch(() => {}); }}
           className="group flex items-center gap-2 px-4 py-2.5 bg-[#0a0a0a] border border-[#222] rounded-full text-[#f5f5f7] text-sm font-medium hover:border-[#0ff0fc]/40 hover:bg-[#0ff0fc]/5 hover:shadow-[0_0_20px_rgba(15,240,252,0.15)] hover:-translate-y-0.5 transition-all duration-200 motion-reduce:transition-none motion-reduce:hover:translate-y-0 focus:outline-none focus:border-[#0ff0fc]/60 focus:shadow-[0_0_24px_rgba(15,240,252,0.25)] focus-visible:ring-2 focus-visible:ring-[#0ff0fc] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505] w-full sm:w-auto justify-center sm:justify-start"
           aria-label="Share commitment"
         >
