@@ -13,6 +13,9 @@
  *   SSE_RETRY_MS (default 3000, min 1000)
  * - Optional `format=json` query param returns a paginated JSON event list.
  * - Pagination uses `page` (1-based) and `pageSize` (default 10, min 1).
+ * - JSON response shape: `{ events, page, pageSize, total, hasMore }`.
+ * - If `page` is out of range, `events` is an empty array; `hasMore` is false.
+ * - Invalid `page`/`pageSize` values fall back to defaults (`page=1`, `pageSize=10`).
  */
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/backend/requireAuth';
@@ -59,10 +62,10 @@ export const validateInterval = (value: string | undefined, defaultValue: number
   return parsed;
 };
 
-export const parsePositiveInt = (value: string | null, defaultValue: number) => {
+export const parsePositiveInt = (value: string | null, defaultValue: number, min = 1) => {
   if (value === null) return defaultValue;
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) return defaultValue;
+  if (!Number.isInteger(parsed) || parsed < min) return defaultValue;
   return parsed;
 };
 
@@ -93,8 +96,8 @@ export const GET = withApiHandler(
 
     // JSON mode for paginated event history (supports ?format=json&page=&pageSize=)
     if (req.nextUrl.searchParams.get('format') === 'json') {
-      const page = parsePositiveInt(req.nextUrl.searchParams.get('page'), 1);
-      const pageSize = parsePositiveInt(req.nextUrl.searchParams.get('pageSize'), 10);
+      const page = parsePositiveInt(req.nextUrl.searchParams.get('page'), 1, 1);
+      const pageSize = parsePositiveInt(req.nextUrl.searchParams.get('pageSize'), 10, 1);
       const status = mapStatus(initialCommitment.status);
       const snapshotEvent = {
         id: getEventId('snapshot'),
@@ -105,12 +108,16 @@ export const GET = withApiHandler(
           timestamp: new Date().toISOString(),
         },
       };
+      const total = 1;
+      const startIndex = (page - 1) * pageSize;
+      const events = startIndex < total ? [snapshotEvent] : [];
+      const hasMore = startIndex + pageSize < total;
       return Response.json({
-        events: [snapshotEvent],
+        events,
         page,
         pageSize,
-        total: 1,
-        hasMore: false,
+        total,
+        hasMore,
       });
     }
 
