@@ -81,7 +81,7 @@ export function dedupeCommitmentEvents(events: CommitmentEvent[]): CommitmentEve
 // --- Cursor utilities ---
 
 function encodeBase64Url(input: string): string {
-  if (typeof btoa === 'function') {
+  if (typeof btoa === 'function' && typeof TextEncoder !== 'undefined') {
     const bytes = new TextEncoder().encode(input);
     let binary = '';
     for (const byte of bytes) { binary += String.fromCharCode(byte); }
@@ -101,7 +101,7 @@ function decodeBase64Url(input: string): string {
   const base64 = input.replace(/-/g, '+').replace(/_/g, '/');
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
 
-  if (typeof atob === 'function') {
+  if (typeof atob === 'function' && typeof TextDecoder !== 'undefined') {
     const binary = atob(padded);
     const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
     return new TextDecoder().decode(bytes);
@@ -155,7 +155,7 @@ export function decodeCommitmentCursor(cursor: string): CommitmentCursor {
     parsed.id.length === 0 ||
     typeof parsed.ts !== 'string' ||
     parsed.ts.length === 0 ||
-    (parsed.seq !== null && typeof parsed.seq !== 'number')
+    (parsed.seq !== null && (typeof parsed.seq !== 'number' || !Number.isFinite(parsed.seq)))
   ) {
     throw new CommitmentEventsError('Cursor payload is malformed', ERROR_CODES.INVALID_CURSOR, parsed);
   }
@@ -280,7 +280,7 @@ export async function fetchCommitmentEvents({
     });
 
     if (res.status === 401 || res.status === 403) {
-      throw new CommitmentEventsError('Not authorized to access commitment events', 'UNAUTHORIZED', res.status);
+      throw new CommitmentEventsError('Not authorized to access commitment events', ERROR_CODES.UNAUTHORIZED, res.status);
     }
     if (!res.ok) {
       throw new CommitmentEventsError( `HTTP error ${res.status}`, ERROR_CODES.HTTP_ERROR, res.status );
@@ -290,7 +290,7 @@ export async function fetchCommitmentEvents({
     return normalizeCommitmentEventsPage(body);
   } catch (error) {
     if (error instanceof CommitmentEventsError) throw error;
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (typeof error === 'object' && error !== null && (error as { name?: string }).name === 'AbortError') {
       throw new CommitmentEventsError('Request was aborted', ERROR_CODES.ABORTED, error);
     }
     throw new CommitmentEventsError('Failed to fetch commitment events', ERROR_CODES.NETWORK_ERROR, error);
@@ -305,10 +305,10 @@ function normalizeCommitmentEventsPage(value: unknown): CommitmentEventsPage {
   if (!Array.isArray(v.events)) {
     throw new CommitmentEventsError('Events page must contain an array of events', ERROR_CODES.INVALID_EVENT, value);
   }
-  const events = v.events.map(event => normalizeCommitmentEvent(event));
+  const events = dedupeCommitmentEvents(sortCommitmentEvents(v.events.map(event => normalizeCommitmentEvent(event))));
   const nextCursor = typeof v.nextCursor === 'string' ? v.nextCursor : null;
   const hasMore = Boolean(v.hasMore);
-  const total = typeof v.total === 'number' ? v.total : undefined;
+  const total = typeof v.total === 'number' && Number.isFinite(v.total) && v.total >= 0 ? v.total : undefined;
   return { events, nextCursor, hasMore, total };
 }
 
@@ -322,8 +322,13 @@ export function mergeCommitmentEventPages(
   previous?: CommitmentEventsPage | null,
   next?: CommitmentEventsPage | null
 ): CommitmentEventsPage {
-  if (!previous) return next ?? { events: [], nextCursor: null, hasMore: false };
-  if (!next) return previous ?? { events: [], nextCursor: null, hasMore: false };
+  if (!previous) {
+    if (!next) return { events: [], nextCursor: null, hasMore: false };
+    return { ...next, events: dedupeCommitmentEvents(sortCommitmentEvents(next.events)) };
+  }
+  if (!next) {
+    return { ...previous, events: dedupeCommitmentEvents(sortCommitmentEvents(previous.events)) };
+  }
   const merged = sortCommitmentEvents([...previous.events, ...next.events]);
   const events = dedupeCommitmentEvents(merged);
   return {
