@@ -11,6 +11,8 @@
  *   SSE_POLL_INTERVAL_MS (default 5000, min 1000)
  *   SSE_KEEPALIVE_INTERVAL_MS (default 30000, min 1000)
  *   SSE_RETRY_MS (default 3000, min 1000)
+ * - Optional `format=json` query param returns a paginated JSON event list.
+ * - Pagination uses `page` (1-based) and `pageSize` (default 10, min 1).
  */
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/backend/requireAuth';
@@ -57,6 +59,13 @@ export const validateInterval = (value: string | undefined, defaultValue: number
   return parsed;
 };
 
+export const parsePositiveInt = (value: string | null, defaultValue: number) => {
+  if (value === null) return defaultValue;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) return defaultValue;
+  return parsed;
+};
+
 export const GET = withApiHandler(
   async (req: NextRequest, context: { params: { id: string } }) => {
     requireAuth(req);
@@ -80,6 +89,29 @@ export const GET = withApiHandler(
 
     if (!initialCommitment) {
       throw new NotFoundError('Commitment', { commitmentId });
+    }
+
+    // JSON mode for paginated event history (supports ?format=json&page=&pageSize=)
+    if (req.nextUrl.searchParams.get('format') === 'json') {
+      const page = parsePositiveInt(req.nextUrl.searchParams.get('page'), 1);
+      const pageSize = parsePositiveInt(req.nextUrl.searchParams.get('pageSize'), 10);
+      const status = mapStatus(initialCommitment.status);
+      const snapshotEvent = {
+        id: getEventId('snapshot'),
+        type: 'snapshot',
+        data: {
+          commitmentId,
+          status,
+          timestamp: new Date().toISOString(),
+        },
+      };
+      return Response.json({
+        events: [snapshotEvent],
+        page,
+        pageSize,
+        total: 1,
+        hasMore: false,
+      });
     }
 
     const encoder = new TextEncoder();
