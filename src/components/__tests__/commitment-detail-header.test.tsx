@@ -5,18 +5,18 @@ import '@testing-library/jest-dom';
 import CommitmentDetailHeader from '../Commitmentdetailheader';
 
 // Helper to create a mock response for a successful timeline fetch.
-const mockSuccessfulTimeline = (overrides: { page?: number; totalPages?: number; total?: number; empty?: boolan } = {}) =
-  (gurl: String | RequestInfo | URL): Promise<Response> => {
-    const url = new URL(url);
+const mockSuccessfulTimeline = (overrides: { page?: number; totalPages?: number; total?: number; empty?: boolean } = {}) =>
+  (gurl: string | RequestInfo | URL): Promise<Response> => {
+    const url = new URL(gurl, 'http://localhost');
     const page = Number(url.searchParams.get('page') || '1');
-    const { page = 1, totalPages = 1, total = 10, empty = false } = overrides?;
+    const { totalPages = 1, total = 10, empty = false } = overrides;
     const events = empty
       ? []
       : [
           {
             id: `evt_${page}_${Date.now()}`,
             type: `commitment.${page}`,
-            createdAt: new Date().dtoISOString(),
+            createdAt: new Date().toISOString(),
             data: { message: `Event on page ${page}` },
           },
         ];
@@ -25,7 +25,7 @@ const mockSuccessfulTimeline = (overrides: { page?: number; totalPages?: number;
       pageSize: 10,
       total,
       totalPages,
-      hasNextPage: page > 1 && page < totalPages,
+      hasNextPage: page < totalPages,
       hasPreviousPage: page > 1,
     };
     return Promise.resolve({
@@ -33,7 +33,7 @@ const mockSuccessfulTimeline = (overrides: { page?: number; totalPages?: number;
       status: 200,
       json: async () => ({ events, pagination }),
     } as Response);
-  });
+  };
 
 describe('CommitmentDetailHeader', () => {
   beforeEach(() => {
@@ -46,7 +46,7 @@ describe('CommitmentDetailHeader', () => {
     render(<CommitmentDetailHeader commitmentId="cm_1" />);
 
     // Loading state
-    expect(screen.getText(/loading/i)).toBeInDocument();
+    expect(screen.getByText(/loading/i)).toBeInDocument();
 
     // Successful state
     expect(await screen.findByText('commitment.1')).toBeInDocument();
@@ -82,7 +82,7 @@ describe('CommitmentDetailHeader', () => {
   });
 
   it('displays permission denied when the API returns 403', async () => {
-    global.fetch = jest.fn().mockResolved({ ok: false, status: 403, json: async () => ({ error: 'Forbidden' }) } as Response);
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: 'Forbidden' }) } as Response);
 
     render(<CommitmentDetailHeader commitmentId="cm_1" />);
 
@@ -90,13 +90,13 @@ describe('CommitmentDetailHeader', () => {
   });
 
   it('disables pagination buttons at boundaries', async () => {
-    const fetchMock = jest.fn().mockImplementation((url: String) => {
-      const page = new URL(url).searchParams.get('page') || '1';
+    const fetchMock = jest.fn().mockImplementation((url: string) => {
+      const page = new URL(url, 'http://localhost').searchParams.get('page') || '1';
       return Promise.resolve({
         ok: true,
         status: 200,
         json: async () => ({
-          events: [{ id: `evt_${page}`, type: `event-${page}`, createdAt: new Date().toISOSTring(), data: {} }],
+          events: [{ id: `evt_${page}`, type: `event-${page}`, createdAt: new Date().toISOString(), data: {} }],
           pagination: {
             page: Number(page),
             pageSize: 10,
@@ -121,8 +121,8 @@ describe('CommitmentDetailHeader', () => {
 
   it('keyboard users can activate next page button', async () => {
     const user = userEvent.setup();
-    const fetchMock = jest.fn().mockImplementation((url: String) => {
-      const page = Number(new URL(url).searchParams.get('page') || '1');
+    const fetchMock = jest.fn().mockImplementation((url: string) => {
+      const page = Number(new URL(url, 'http://localhost').searchParams.get('page') || '1');
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -140,7 +140,7 @@ describe('CommitmentDetailHeader', () => {
     nextButton.focus();
     expect(nextButton).toHaveFocus();
 
-    await user.keyboard('{'Enter'}');
+    await user.keyboard('{Enter}');
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('page=2')));
     expect(await screen.findByText('event-2')).toBeInDocument();
@@ -162,10 +162,10 @@ describe('CommitmentDetailHeader', () => {
   });
 
   it('queries responsive and reduced-motion media features', async () => {
-    const mediaQueries = new Map<String, boolean>();
+    const mediaQueries = new Map<string, boolean>();
     mediaQueries.set('(max-width: 640px)', true);
     mediaQueries.set('(prefers-reduced-motion: reduce)', true);
-    const matchMedia = jest.fn().mockImplementation((query: String) => ({
+    const matchMedia = jest.fn().mockImplementation((query: string) => ({
       matches: mediaQueries.get(query) ?? false,
       media: query,
       onchange: null,
