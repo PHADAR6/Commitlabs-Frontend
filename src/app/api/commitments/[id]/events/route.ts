@@ -7,9 +7,10 @@
  * - Each event carries an `id:` line for Last-Event-ID reconnection support.
  * - Clients should reconnect on connection loss and send `Last-Event-ID`.
  * - The stream is read-only; authorization is enforced via requireAuth.
- * - Polling and keepalive intervals are configurable via env vars:
+ * - Polling, keepalive, and retry intervals are configurable via env vars:
  *   SSE_POLL_INTERVAL_MS (default 5000, min 1000)
  *   SSE_KEEPALIVE_INTERVAL_MS (default 30000, min 1000)
+ *   SSE_RETRY_MS (default 3000, min 1000)
  */
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/backend/requireAuth';
@@ -22,10 +23,11 @@ import { checkRateLimit } from '@/lib/backend/rateLimit';
 
 const DEFAULT_POLL_INTERVAL = 5000;
 const DEFAULT_KEEPALIVE_INTERVAL = 30000;
+const DEFAULT_RETRY_INTERVAL = 3000;
 const MIN_INTERVAL = 1000;
 
 let eventCounter = 0;
-const getEventId = (prefix: string) => `evt-${prefix}-${Date.now().toString(36)}-${++eventCounter}`;
+export const getEventId = (prefix: string) => `evt-${prefix}-${Date.now().toString(36)}-${++eventCounter}`;
 
 const EVENTS_CORS_POLICY = {
   GET: { access: 'first-party' },
@@ -33,7 +35,7 @@ const EVENTS_CORS_POLICY = {
 
 export const OPTIONS = createCorsOptionsHandler(EVENTS_CORS_POLICY);
 
-function mapStatus(status: any): CommitmentStatus | 'Unknown' {
+export function mapStatus(status: any): CommitmentStatus | 'Unknown' {
   switch (status) {
     case 'ACTIVE':
       return 'Active';
@@ -48,7 +50,7 @@ function mapStatus(status: any): CommitmentStatus | 'Unknown' {
   }
 }
 
-const validateInterval = (value: string | undefined, defaultValue: number) => {
+export const validateInterval = (value: string | undefined, defaultValue: number) => {
   if (!value) return defaultValue;
   const parsed = parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed < MIN_INTERVAL) return defaultValue;
@@ -84,11 +86,26 @@ export const GET = withApiHandler(
     let pollIntervalId: NodeJS.Timeout | null = null;
     let keepaliveIntervalId: NodeJS.Timeout | null = null;
     let isClosed = false;
+    let abortHandler: (() => void) | null = null;
 
     const stream = new ReadableStream({
       async start(controller) {
+        if (req.signal.aborted) {
+          isClosed = true;
+          try {
+            controller.close();
+          } catch {
+            // Stream already closed
+          }
+          return;
+        }
+
         let lastStatus = mapStatus(initialCommitment.status);
 
+        const retryIntervalMs = validateInterval(
+          process.env.SSE_RETRY_MS,
+          DEFAULT_RETRY_INTERVAL,
+        );
         const snapshotPayload = {
           commitmentId,
           status: lastStatus,
@@ -97,7 +114,7 @@ export const GET = withApiHandler(
         const snapshotId = getEventId('snapshot');
         controller.enqueue(
           encoder.encode(
-            `id: ${snapshotId}\nevent: snapshot\ndata: ${JSON.stringify(snapshotPayload)}\n\n`,
+            `retry: ${retryIntervalMs}\nid: ${snapshotId}\nevent: snapshot\ndata: ${JSON.stringify(snapshotPayload)}\n\n`,
           ),
         );
 
@@ -106,7 +123,7 @@ export const GET = withApiHandler(
           isClosed = true;
           if (pollIntervalId) clearInterval(pollIntervalId);
           if (keepaliveIntervalId) clearInterval(keepaliveIntervalId);
-          req.signal.removeEventListener('abort', abortHandler);
+          if (abortHandler) req.signal.removeEventListener('abort', abortHandler);
           try {
             controller.close();
           } catch {
@@ -114,7 +131,7 @@ export const GET = withApiHandler(
           }
         };
 
-        const abortHandler = () => {
+        abortHandler = () => {
           cleanup();
         };
         req.signal.addEventListener('abort', abortHandler);
@@ -177,6 +194,7 @@ export const GET = withApiHandler(
         isClosed = true;
         if (pollIntervalId) clearInterval(pollIntervalId);
         if (keepaliveIntervalId) clearInterval(keepaliveIntervalId);
+        if (abortHandler) req.signal.removeEventListener('abort', abortHandler);
       },
     });
 
