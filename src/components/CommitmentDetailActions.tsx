@@ -14,10 +14,18 @@ interface CommitmentDetailActionsProps {
   commitmentId?: string;
   onSettle?: () => void;
   settleDisabledReason?: string;
+  /**
+   * When set, disables the Report Issue button and surfaces this reason
+   * (e.g. wallet not connected, wrong network, or not the commitment
+   * owner). Filing a dispute is an authorization-sensitive action, so the
+   * caller is expected to derive this from an authoritative ownership
+   * check rather than only from client-visible commitment state.
+   */
+  reportIssueDisabledReason?: string;
   previewRefreshTrigger?: string | number;
 }
 
-export function CommitmentDetailActions ({
+export function CommitmentDetailActions({
   canEarlyExit,
   onEarlyExit,
   onViewAttestations,
@@ -28,8 +36,8 @@ export function CommitmentDetailActions ({
   commitmentId,
   onSettle,
   settleDisabledReason,
+  reportIssueDisabledReason,
   previewRefreshTrigger,
-
 }: CommitmentDetailActionsProps) {
   const focusRing =
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0FF0FC] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]';
@@ -48,7 +56,7 @@ export function CommitmentDetailActions ({
       {/* Primary Actions */}
       <div className="mb-8">
         <h3 className="text-white text-base font-semibold mb-4">Primary Actions</h3>
-        
+
         {/* Early Exit Button */}
         <button
           onClick={canEarlyExit ? onEarlyExit : undefined}
@@ -58,17 +66,18 @@ export function CommitmentDetailActions ({
             w-full rounded-3xl px-8 py-6
             border-2 transition-all duration-300
             flex items-center gap-6 justify-center
-            ${canEarlyExit 
-              ? 'bg-[#0A0A0A] border-[#F97316] shadow-[0_4px_24px_rgba(249,115,22,0.2),inset_0_1px_0_rgba(249,115,22,0.1)] hover:shadow-[0_8px_32px_rgba(249,115,22,0.3),inset_0_1px_0_rgba(249,115,22,0.2)] cursor-pointer hover:bg-[#161616]' 
-              : 'bg-[#161616] border-[#F97316]/30 opacity-50 cursor-not-allowed'
+            ${
+              canEarlyExit
+                ? 'bg-[#0A0A0A] border-[#F97316] shadow-[0_4px_24px_rgba(249,115,22,0.2),inset_0_1px_0_rgba(249,115,22,0.1)] hover:shadow-[0_8px_32px_rgba(249,115,22,0.3),inset_0_1px_0_rgba(249,115,22,0.2)] cursor-pointer hover:bg-[#161616]'
+                : 'bg-[#161616] border-[#F97316]/30 opacity-50 cursor-not-allowed'
             }
             ${focusRing}
           `}
           aria-label="Early Exit - Exit before expiry (penalty applies)"
           aria-disabled={!canEarlyExit}
         >
-          <FiLogOut className="text-[#F97316]" size={28}/>
-          
+          <FiLogOut className="text-[#F97316]" size={28} />
+
           <div className="text-left">
             <div className="text-[#F97316] text-xl font-semibold mb-1">Early Exit</div>
             <div className="text-white/50 text-sm">Exit before expiry (penalty applies)</div>
@@ -88,7 +97,7 @@ export function CommitmentDetailActions ({
       {/* Additional Actions */}
       <div className="mb-8">
         <h3 className="text-white text-base font-semibold mb-4">Additional Actions</h3>
-        
+
         <div className="space-y-3">
           {/* View Full Attestation History */}
           <button
@@ -104,8 +113,8 @@ export function CommitmentDetailActions ({
             `}
             aria-label="View Full Attestation History"
           >
-            <FiFileText className="text-white/70" size={22}/>
-            
+            <FiFileText className="text-white/70" size={22} />
+
             <span className="text-white text-base flex-1 text-left font-medium">
               View Full Attestation History
             </span>
@@ -125,8 +134,8 @@ export function CommitmentDetailActions ({
             `}
             aria-label="Export Commitment Data"
           >
-            <FiDownload className="text-white/70" size={22}/>
-            
+            <FiDownload className="text-white/70" size={22} />
+
             <span className="text-white text-base flex-1 text-left font-medium">
               Export Commitment Data
             </span>
@@ -148,11 +157,13 @@ export function CommitmentDetailActions ({
               aria-label="Duplicate Commitment - create a new commitment prefilled with these parameters"
               data-testid="duplicate-commitment-btn"
             >
-              <FiCopy className="text-[#0FF0FC]/70" size={22}/>
+              <FiCopy className="text-[#0FF0FC]/70" size={22} />
 
               <div className="text-left">
                 <span className="text-white text-base font-medium block">Duplicate Commitment</span>
-                <span className="text-white/50 text-xs">Open create flow prefilled with these parameters</span>
+                <span className="text-white/50 text-xs">
+                  Open create flow prefilled with these parameters
+                </span>
               </div>
             </button>
           )}
@@ -183,19 +194,25 @@ export function CommitmentDetailActions ({
 
           {/* Report an Issue */}
           <button
-            onClick={onReportIssue}
+            onClick={reportIssueDisabledReason ? undefined : onReportIssue}
+            disabled={!!reportIssueDisabledReason}
+            title={reportIssueDisabledReason}
             className={`
               w-full rounded-2xl px-6 py-4
               bg-[#161616] border border-[#232323]
-              hover:bg-[#1a1a1a] hover:border-[#1f1f1f]
               transition-all duration-200
               flex items-center gap-4
-              cursor-pointer
               ${focusRing}
+              ${
+                reportIssueDisabledReason
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'hover:bg-[#1a1a1a] hover:border-[#1f1f1f] cursor-pointer'
+              }
             `}
             aria-label="Report an Issue"
+            aria-disabled={!!reportIssueDisabledReason}
           >
-            <FiAlertCircle className="text-white/70" size={22}/>
+            <FiAlertCircle className="text-white/70" size={22} />
 
             <span className="text-white text-base flex-1 text-left font-medium">
               Report an Issue
@@ -205,16 +222,18 @@ export function CommitmentDetailActions ({
       </div>
 
       {/* Helper Note */}
-      <div className="
+      <div
+        className="
         rounded-3xl px-6 py-5
         bg-[#0a1516] border border-[#0a282a]
         flex items-start gap-4 
-      ">
+      "
+      >
         <p className="text-white/50 text-sm leading-relaxed">
-           All actions are recorded on-chain and can be verified through attestations. Contact support if you encounter any issues.
+          All actions are recorded on-chain and can be verified through attestations. Contact
+          support if you encounter any issues.
         </p>
       </div>
     </div>
   );
-};
-
+}
